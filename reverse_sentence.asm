@@ -1,4 +1,4 @@
-	.data
+.data
 wel_txt:	.ascii "Hi,enter sentence\n"
 str:		.space	1024
 	.text
@@ -41,3 +41,4 @@ end:
 	syscall
 	li	$v0,10
 	syscall
+		
