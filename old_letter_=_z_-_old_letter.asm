@@ -1,7 +1,7 @@
-	.data
+.data
 wel:	.asciiz	"enter sentence: "
 str:	.space	128
-	.text
+.text
 main:	
 	li	$v0,4
 	la	$a0,wel
@@ -27,4 +27,3 @@ end:
 	syscall
 	li	$v0,10
 	syscall
-	
