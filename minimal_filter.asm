@@ -2,7 +2,6 @@
 		.eqv	BUFFER_SIZE 	210021 #(10000*3+3)*7=210021
 		.eqv	INPUT_BUFFER_SIZE	128
 		.eqv	INIT_COLOR	255
-filtred_lines:	.word	1
 buf:		.space 	BUFFER_SIZE		
 outBuf:		.space	BUFFER_SIZE
 input_txt:	.asciiz	"input:	"
@@ -24,7 +23,7 @@ success_txt:	.asciiz "filtred :D\n"
 #$t5=B			
 #$t6=G						
 #$t7=R
-#$t8=window
+#$t8=window				/later filtred lines in current cycle
 #$t9=(window-1)/2
 
 #$s0=global x
@@ -147,12 +146,12 @@ end_atoi:
 	sub	$a3,	$t1,	$a3
 check_height:
 	mul	$v1,	$t2,	3
-	add	$v1,	$v1,	$a3		#real size of line
-	sw	$zero,	filtred_lines	
+	add	$v1,	$v1,	$a3		#real size of line	
 	
 	li	$t0,	BUFFER_SIZE			#max lines in buf
 	div 	$t4,	$t0,	$v1
 	bgt	$t8,	$t4,	error
+	li 	$t8,	0			#change of meaning $t8
 init_buf:
 	li	$v0,	14	
 	move	$a0,	$fp			#load lines to buf
@@ -164,14 +163,14 @@ smaller_height:
 	syscall
 	bne	$v0,	$a2,	error
 init_RGB:					
-	li	$t5,	INIT_COLOR	
+	li	$t5,	INIT_COLOR#255	
 	li	$t6,	INIT_COLOR	
 	li	$t7,	INIT_COLOR
-min_Y:
+min_Y:#<0,height)
 	sub	$s3,	$s1,	$t9
 	bgez	$s3,	min_X
 	li	$s3,	0
-min_X:
+min_X:#<0,width)
 	sub	$s2,	$s0,	$t9
 	bgez	$s2,	max_Y
 	li	$s2,	0
@@ -213,8 +212,8 @@ check_next_pixel:
 	addiu	$s7,	$s7,	1		#y++
 	ble	$s7,	$s5,	init_X		#y<=y_max
 save_pixel:
-	lw	$t0,	filtred_lines		#calculate place for colors in out buf
-	mul	$s7,	$t0,	$v1		
+			#calculate place for colors in out buf
+	mul	$s7,	$t8,	$v1		
 	mul	$t0,	$s0,	3
 	add	$s7,	$t0,	$s7
 	sb	$t5,	outBuf($s7)		#store pixel
@@ -235,15 +234,13 @@ add_padding:
 	addiu	$t1, 	$t1,	1	
 	j	add_padding	
 end_add_padding:	
-	lw	$t0,	filtred_lines
-	addi	$t0	$t0,	1
-	sw	$t0,	filtred_lines
+	addi	$t8	$t8,	1
 	
 	li	$s0,	0			#global_x=0
 	addi	$s1,	$s1,	1		#global_y++
 	bge	$s1,	$t3,	save		#end of file
 	
-	add	$t0,	$t9,	$t0
+	add	$t0,	$t9,	$t8
 	blt	$s1,	$t4,	not_first_buf
 	add	$t0,	$t9,	$t0
 not_first_buf:
@@ -252,20 +249,19 @@ save:
 	li	$v0,	15
 	move	$a0,	$ra
 	la	$a1,	outBuf
-	lw	$t0,	filtred_lines
-	mul 	$a2,	$v1,	$t0
+	mul 	$a2,	$v1,	$t8
 	syscall
 	bltz	$v0,	error
 	bge	$s1,	$t3,	exit		#end of file
-	sw	$zero,	filtred_lines		#reset filtred lines
+	li	$t8,	0		#reset filtred lines
 
 	li	$v0,	14
 	move 	$a0,	$fp			#load new lines
-min_mask:	
+min_mask:	#first ocupied line in buf
 	sub	$s2,	$s1,	$t9	
 	div	$s2,	$t4
 	mfhi	$s2	
-max_mask:
+max_mask:	#first free line in buf
 	add	$s3,	$s1,	$t9
 	div	$s3,	$t4
 	mfhi	$s3
@@ -311,6 +307,12 @@ not_end_line2:
 	syscall
 	bne	$v0,	$a2,	error
 	j	init_RGB
+	
+close_in:
+	li 	$v0,	4
+	la	$a0,	error_txt
+	syscall
+	j	close_in1
 error:	
 	li	$v0,	4
 	la	$a0,	error_txt
@@ -324,7 +326,7 @@ close_out:
 	li	$v0,	16		
 	move	$a0,	$ra
 	syscall
-close_in:
+close_in1:
 	li	$v0,	16
 	move	$a0,	$fp
 	syscall
