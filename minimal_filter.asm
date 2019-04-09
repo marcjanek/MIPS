@@ -238,10 +238,15 @@ end_add_padding:
 	
 	li	$s0,	0			#global_x=0
 	addi	$s1,	$s1,	1		#global_y++
+	add	$t1,	$s1,	$t9
+	sub	$t1,	$t3,	$t1		#total lines to put in buf
 	bge	$s1,	$t3,	save		#end of file
 	
 	add	$t0,	$t9,	$t8
 	blt	$s1,	$t4,	not_first_buf
+	add	$t0,	$t9,	$t0
+	j not_first_buf
+	bnez	$t1,	not_first_buf#this time last
 	add	$t0,	$t9,	$t0
 not_first_buf:
 	blt	$t0,	$t4,	init_RGB	#end of buf									
@@ -265,9 +270,6 @@ max_mask:	#first free line in buf
 	add	$s3,	$s1,	$t9
 	div	$s3,	$t4
 	mfhi	$s3
-	
-	add	$t1,	$s1,	$t9
-	sub	$t1,	$t3,	$t1		#total lines to put in buf
 	
 	ble	$s2,	$s3,	two_sys1
 one_sys:
