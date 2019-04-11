@@ -10,6 +10,9 @@ mask_txt:	.asciiz	"mask: "
 input:		.space	INPUT_BUFFER_SIZE
 output:		.space	INPUT_BUFFER_SIZE
 mask:		.space	INPUT_BUFFER_SIZE
+input_des:	.word 	1
+output_des:	.word	1
+padding:	.word 	1
 error_txt:	.asciiz "error :/\n"
 success_txt:	.asciiz "filtred :D\n"
 .text
@@ -36,10 +39,8 @@ success_txt:	.asciiz "filtred :D\n"
 #$s7=cur y
 
 #$v1=width*3+padding
-#$a3=padding
 
-#$fp=input descriptor 
-#$ra=output descriptor	
+	li 	$fp,	0
 	li 	$v0,	4
 	la	$a0,	input_txt
 	syscall
@@ -97,10 +98,10 @@ end_atoi:
 	li	$a1,	0	
 	syscall
 	bltz	$v0,	error			
-	move	$fp,	$v0	
+	sw	$v0,	input_des	
 	
 	li	$v0,	14			
-	move	$a0,	$fp
+	lw	$a0,	input_des
 	la	$a1,	buf+2			
 	li	$a2,	54
 	syscall
@@ -125,14 +126,14 @@ end_atoi:
 
 	li	$v0,	13			#open out	
 	la	$a0,	output
-	li	$a1,	9
+	li	$a1,	1
 	li 	$a2,	0
 	syscall
-	bltz	$v0,	exit			
-	move	$ra,	$v0
+	bltz	$v0,	exit	
+	sw	$v0,	output_des		
 
 	li	$v0,	15			#load headers to out	
-	move	$a0,	$ra
+	lw	$a0,	output_des
 	la	$a1,	buf+2
 	lw	$a2,	buf+12
 	syscall
@@ -145,16 +146,17 @@ end_atoi:
 	beqz	$a3,	check_height 
 	sub	$a3,	$t1,	$a3
 check_height:
+	sw	$a3,	padding
 	mul	$v1,	$t2,	3
-	add	$v1,	$v1,	$a3		#real size of line	
+	add	$v1,	$v1,	$a3			
 	
-	li	$t0,	BUFFER_SIZE			#max lines in buf
+	li	$t0,	BUFFER_SIZE			
 	div 	$t4,	$t0,	$v1
 	bgt	$t8,	$t4,	error
-	li 	$t8,	0			#change of meaning $t8
+	li 	$t8,	0			
 init_buf:
 	li	$v0,	14	
-	move	$a0,	$fp			#load lines to buf
+	lw	$a0,	input_des			
 	la	$a1,	buf
 	ble	$t4,	$t3,	smaller_height
 	move	$t4,	$t3
@@ -162,119 +164,121 @@ smaller_height:
 	mul	$a2,	$v1	$t4
 	syscall
 	bne	$v0,	$a2,	error
+	mul	$sp,	$v1,	$t4
+	mul	$gp,	$t9,	3
+	mul	$t0,	$t9,	$v1
 init_RGB:					
 	li	$t5,	INIT_COLOR#255	
 	li	$t6,	INIT_COLOR	
 	li	$t7,	INIT_COLOR
-min_Y:#<0,height)
+min_Y:
 	sub	$s3,	$s1,	$t9
-	bgez	$s3,	min_X
-	li	$s3,	0
-min_X:#<0,width)
+	bltz	$s3,	save_pixel
+min_X:
 	sub	$s2,	$s0,	$t9
-	bgez	$s2,	max_Y
-	li	$s2,	0
+	bltz	$s2,	save_pixel
 max_Y:
 	add	$s5,	$s1,	$t9
-	blt	$s5,	$t3,	max_X
-	subi	$s5	$t3,	1
+	bge	$s5,	$t3,	save_pixel
 max_X:
 	add	$s4,	$s0,	$t9
-	blt	$s4,	$t2,	init_Y
-	subi	$s4	$t2,	1
+	bge	$s4,	$t2,	save_pixel
 init_Y:
 	move	$s7,	$s3
-init_X:
-	move	$s6,	$s2			#calculate pixel in buf
-	div	$s7,	$t4
+	sub 	$a3,	$fp,	$t0
+	sub	$a3,	$a3,	$gp
+	div	$a3,	$sp
 	mfhi	$t1
-	mul	$t1,	$t1,	$v1
-	mul	$t0,	$s6,	3
-	addu	$t1,	$t1,	$t0
-B:						#check colors
-	lbu	$t0,	buf($t1)
-	bge	$t0,	$t5,	G
-	move	$t5,	$t0
+init_X:
+	move	$s6,	$s2
+						
+B:						
+	lbu	$a0,	buf($t1)
+	bge	$a0,	$t5,	G
+	move	$t5,	$a0
 G:
 	addiu	$t1, 	$t1,	1
-	lbu	$t0,	buf($t1)
-	bge	$t0,	$t6,	R
-	move	$t6,	$t0
+	lbu	$a0,	buf($t1)
+	bge	$a0,	$t6,	R
+	move	$t6,	$a0
 R:
 	addiu	$t1, 	$t1,	1
-	lbu	$t0,	buf($t1)
-	bge	$t0,	$t7,	check_next_pixel	
-	move	$t7,	$t0
+	lbu	$a0,	buf($t1)
+	bge	$a0,	$t7,	check_next_pixel	
+	move	$t7,	$a0
 check_next_pixel:
-	addiu	$t1,	$t1,	1		#pointer++
-	addiu	$s6,	$s6,	1		#x++
-	ble	$s6,	$s4,	B		#x<=max_x
-	addiu	$s7,	$s7,	1		#y++
-	ble	$s7,	$s5,	init_X		#y<=y_max
+	addiu	$t1,	$t1,	1		
+	addiu	$s6,	$s6,	1		
+	ble	$s6,	$s4,	B		
+	add	$a3,	$a3,	$v1
+	div	$a3,	$sp
+	mfhi	$t1
+	addiu	$s7,	$s7,	1		
+	ble	$s7,	$s5,	init_X		
 save_pixel:
-			#calculate place for colors in out buf
-	mul	$s7,	$t8,	$v1		
-	mul	$t0,	$s0,	3
-	add	$s7,	$t0,	$s7
-	sb	$t5,	outBuf($s7)		#store pixel
-	addi	$s7, 	$s7,	1
-	sb	$t6,	outBuf($s7)
-	addi	$s7, 	$s7,	1
-	sb	$t7,	outBuf($s7)
-
-	addi	$s0,	$s0,	1		#global_x++
-	blt	$s0,	$t2,	init_RGB	#global_x<width	
+			
 	
-	move 	$s6,	$a3			#padding
+	sb	$t5,	outBuf($ra)		#store pixel
+	addi	$ra, 	$ra,	1
+	sb	$t6,	outBuf($ra)
+	addi	$ra, 	$ra,	1
+	sb	$t7,	outBuf($ra)
+	addi	$ra,	$ra,	1
+
+	addi	$s0,	$s0,	1		
+	addi	$fp,	$fp,	3
+	blt	$s0,	$t2,	init_RGB		
+	
+	lw 	$s6,	padding			
+	add	$fp,	$fp,	$s6
 add_padding:
 	beqz	$s6,	end_add_padding					
-	lb	$t0,	buf($t1)
-	sb	$t0,	outBuf($s7)
+	lb	$a0,	buf($t1)
+	sb	$a0,	outBuf($ra)
 	subi	$s6,	$s6,	1
-	addiu	$t1, 	$t1,	1	
+	addiu	$ra, 	$ra,	1	
 	j	add_padding	
 end_add_padding:	
-	addi	$t8	$t8,	1
+	addi	$t8	$t8,	1		
 	
-	li	$s0,	0			#global_x=0
-	addi	$s1,	$s1,	1		#global_y++
-	add	$t1,	$s1,	$t9
-	sub	$t1,	$t3,	$t1		#total lines to put in buf
-	bge	$s1,	$t3,	save		#end of file
+	li	$s0,	0			
+	addi	$s1,	$s1,	1		
+	bge	$s1,	$t3,	save		
 	
-	add	$t0,	$t9,	$t8
+	add	$a0,	$t9,	$t8
 	blt	$s1,	$t4,	not_first_buf
-	add	$t0,	$t9,	$t0
-	j not_first_buf
-	bnez	$t1,	not_first_buf#this time last
-	add	$t0,	$t9,	$t0
+	add	$a0,	$t9,	$a0
 not_first_buf:
-	blt	$t0,	$t4,	init_RGB	#end of buf									
+	blt	$a0,	$t4,	init_RGB										
 save:
 	li	$v0,	15
-	move	$a0,	$ra
+	lw	$a0,	output_des
 	la	$a1,	outBuf
-	mul 	$a2,	$v1,	$t8
+	move 	$a2,	$ra
 	syscall
 	bltz	$v0,	error
-	bge	$s1,	$t3,	exit		#end of file
-	li	$t8,	0		#reset filtred lines
+	bge	$s1,	$t3,	exit		
+	li	$t8,	0		
+	li 	$ra,	0
 
 	li	$v0,	14
-	move 	$a0,	$fp			#load new lines
-min_mask:	#first ocupied line in buf
+	lw 	$a0,	input_des			
+min_mask:	
 	sub	$s2,	$s1,	$t9	
 	div	$s2,	$t4
 	mfhi	$s2	
-max_mask:	#first free line in buf
+max_mask:	
 	add	$s3,	$s1,	$t9
 	div	$s3,	$t4
 	mfhi	$s3
 	
+	add	$t1,	$s1,	$t9
+	sub	$t1,	$t3,	$t1		
+	
 	ble	$s2,	$s3,	two_sys1
 one_sys:
-	mul	$t0,	$v1,	$s3
-	la	$a1,	buf($t0)
+	mul	$a1,	$v1,	$s3
+	la	$a1,	buf($a1)
 	sub	$a2,	$s2,	$s3
 	bnez	$a2,	size_not_zero
 	move	$a2,	$t4
@@ -326,11 +330,11 @@ exit:
 	syscall
 close_out:
 	li	$v0,	16		
-	move	$a0,	$ra
+	lw	$a0,	output_des
 	syscall
 close_in1:
 	li	$v0,	16
-	move	$a0,	$fp
+	lw	$a0,	input_des
 	syscall
 	li	$v0,	10
 	syscall
